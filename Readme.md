@@ -4,7 +4,11 @@ Embedded firmware for a PSoC 4-based smart safe prototype, developed at the UzhN
 
 ## HW Platform
 
-![alt text](image/platform1.jpg){width=128 height=96px}
+![alt text](image/platform1.jpg)
+
+### Components 
+
+![alt text](image/platform2.png)
 
 ## Hardware
 

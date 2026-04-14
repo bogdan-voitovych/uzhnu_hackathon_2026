@@ -222,7 +222,7 @@ void FourDigit74HC595_sendNumberInt(int16_t num)
  * @brief Configure latch GPIO state.
  * @param state Desired pin state.
  */
-static void LATCH_CTRL( uint8_t state)
+static inline void LATCH_CTRL( uint8_t state)
 {
 	SEG_74HC595_LATCH_Write(state);
 }
@@ -244,7 +244,6 @@ static void FourDigit74HC595_sendOneDigit(uint8_t pos, uint8_t digit, uint8_t do
 
     SPIM_SpiSetActiveSlaveSelect(SPIM_SPI_SLAVE_SELECT0);
     LATCH_CTRL(GPIO_PIN_RESET);
-	SEG_74HC595_LATCH_Write(GPIO_PIN_RESET);
     SPIM_SpiUartPutArray(mTxBuffer, 2);
 
     while (SPIM_SpiIsBusBusy() != 0) {}

@@ -39,25 +39,23 @@
 #define LOOP_DELAY_MS               (10u)
 #define ADC_LCD_UPDATE_TICKS        (ADC_LCD_UPDATE_INTERVAL_MS / LOOP_DELAY_MS)
 #define RFID_LCD_UPDATE_TICKS       (RFID_LCD_UPDATE_INTERVAL_MS / LOOP_DELAY_MS)
-#define RFID_NO_TAG_READS           (2000u / RFID_LCD_UPDATE_INTERVAL_MS)
+#define RFID_NO_TAG_READS           (500u / RFID_LCD_UPDATE_INTERVAL_MS)
 #define SENSOR_SHOW_DELAY_TICKS     (1200u / LOOP_DELAY_MS)
 
 
 /********************************************************************************
  **********                         PRIVATE VARIABLES                 ***********
 *********************************************************************************/
-char str2[17]={'\0'};
 static char g_lcd_line0[17] = {'\0'};
 static char g_lcd_line1[17] = {'\0'};
-static char g_saved_lcd_line0[17] = {'\0'};
-static char g_saved_lcd_line1[17] = {'\0'};
-static uint8_t g_key3_live_adc_mode = 0u;
+static uint8_t  g_key3_live_adc_mode = 0u;
+static uint16_t g_key3_delay_tick    = 0u;
 static uint8_t  g_key4_live_acc_mode = 0u;
 static uint16_t g_key4_delay_tick    = 0u;
 static uint8_t  g_key5_live_gyr_mode = 0u;
 static uint16_t g_key5_delay_tick    = 0u;
 static uint8_t  g_key6_live_mag_mode = 0u;
-static uint8_t  g_key6_delay_tick    = 0u;
+static uint16_t g_key6_delay_tick    = 0u;
 static uint8_t  g_key7_live_baro_mode  = 0u;
 static uint8_t  g_key9_live_rfid_mode = 0u;
 static uint8_t  g_key12_live_reed_mode = 0u;
@@ -81,20 +79,9 @@ static void app_lcd_show(const char *line0, const char *line1)
     lib_lcd1602_write_str(0u, 1u, g_lcd_line1);
 }
 
-static void app_save_current_lcd(void)
-{
-    snprintf(g_saved_lcd_line0, sizeof(g_saved_lcd_line0), "%s", g_lcd_line0);
-    snprintf(g_saved_lcd_line1, sizeof(g_saved_lcd_line1), "%s", g_lcd_line1);
-}
-
-static void app_restore_saved_lcd(void)
-{
-    app_lcd_show(g_saved_lcd_line0, g_saved_lcd_line1);
-}
-
 static void app_show_default_lcd_splash(void)
 {
-    app_lcd_show("     UzhNU", "   HACKATON!");
+    app_lcd_show("     UzhNU", "   HACKATHON!");
 }
 
 static void app_show_adc_live_on_lcd(int16_t adc0, int16_t adc1, int16_t adc2)
@@ -102,7 +89,7 @@ static void app_show_adc_live_on_lcd(int16_t adc0, int16_t adc1, int16_t adc2)
     char line0[17];
     char line1[17];
 
-    /* Keep all ADC values on one LCD screen while key 3 is held. */
+    /* Keep all ADC values on one LCD screen in live mode. */
     snprintf(line0, sizeof(line0), "0:%+5d 1:%+5d", adc0, adc1);
     snprintf(line1, sizeof(line1), "2:%+5d", adc2);
 
@@ -114,11 +101,8 @@ static void app_show_key_splash(const char *line0, const char *line1)
     app_lcd_show(line0, line1);
 }
 
-static void app_key_0_action(uint8_t digits[8])
+static void app_key_0_action()
 {
-    digits[0] = 0u;
-    lib_seg_display_update(digits);
-
     app_show_key_splash("0: RGB Pattern", "R G B RGB loop");
     LOG_I(TAG, "KEY 0: RGB LED pattern start");
 
@@ -164,10 +148,8 @@ static void app_key_0_action(uint8_t digits[8])
     app_show_default_lcd_splash();
 }
 
-static void app_key_1_action(uint8_t digits[8])
+static void app_key_1_action()
 {
-    digits[0] = 1u;
-    lib_seg_display_update(digits);
     app_show_key_splash("1: Servo Sweep", "0->90->180->90");
     LOG_I(TAG, "KEY 1: Servo pattern start");
     lib_servo_set_angle(0u);
@@ -180,20 +162,17 @@ static void app_key_1_action(uint8_t digits[8])
     LOG_I(TAG, "KEY 1: Servo pattern done");
 }
 
-static void app_key_2_action(uint8_t digits[8])
+static void app_key_2_action()
 {
-    digits[0] = 2u;
-    lib_seg_display_update(digits);
     app_show_key_splash("2: Buzzer", "Melody playback");
     LOG_I(TAG, "KEY 2: Play buzzer melody");
     lib_buzzer_play_melody();
 }
 
-static void app_key_3_action(uint8_t digits[8])
+static void app_key_3_action()
 {
-    digits[0] = 3u;
-    lib_seg_display_update(digits);
-    app_show_key_splash("3: ADC Live", "Hold to display");
+    app_show_key_splash("3: ADC Live", "Live display");
+    g_key3_delay_tick    = 0u;
     g_key3_live_adc_mode = 1u;
     LOG_I(TAG, "KEY 3: Live ADC LCD mode ON");
 }
@@ -216,18 +195,17 @@ static void app_show_sensor_temp_on_lcd(const char *label, int16_t temp)
 {
     char line0[17];
     char line1[17];
+    int t_int  = (int)(temp / 10);
+    int t_frac = (int)((temp < 0 ? -temp : temp) % 10);
 
     snprintf(line0, sizeof(line0), "%-16s", label);
-    snprintf(line1, sizeof(line1), "Temp: %+6d C", (int)temp);
+    snprintf(line1, sizeof(line1), "Temp: %+d.%d C", t_int, t_frac);
 
     app_lcd_show(line0, line1);
 }
 
-static void app_key_4_action(uint8_t digits[8])
+static void app_key_4_action()
 {
-    digits[0] = 4u;
-    lib_seg_display_update(digits);
-
     LOG_I(TAG, "KEY 4 TEMP: IMU=%d C", (int)g_last_imu_temp);
     app_show_sensor_temp_on_lcd("4: Accelerometer", g_last_imu_temp);
 
@@ -269,11 +247,8 @@ static void app_show_reed_status_on_lcd(uint8_t reed_raw)
     }
 }
 
-static void app_key_5_action(uint8_t digits[8])
+static void app_key_5_action()
 {
-    digits[0] = 5u;
-    lib_seg_display_update(digits);
-
     LOG_I(TAG, "KEY 5 TEMP: IMU=%d C", (int)g_last_imu_temp);
     app_show_sensor_temp_on_lcd("5: Gyroscope", g_last_imu_temp);
 
@@ -281,11 +256,8 @@ static void app_key_5_action(uint8_t digits[8])
     g_key5_live_gyr_mode = 1u;
 }
 
-static void app_key_6_action(uint8_t digits[8])
+static void app_key_6_action()
 {
-    digits[0] = 6u;
-    lib_seg_display_update(digits);
-
     LOG_I(TAG, "KEY 6 TEMP: Mag=%d C", (int)g_last_mag_temp);
     app_show_sensor_temp_on_lcd("6: Magnetometer", g_last_mag_temp);
 
@@ -297,16 +269,16 @@ static void app_show_baro_live_on_lcd(lib_barometer_data_t baro)
 {
     char line0[17];
     char line1[17];
+    int t_int  = (int)(baro.temperature / 10);
+    int t_frac = (int)((baro.temperature < 0 ? -baro.temperature : baro.temperature) % 10);
     snprintf(line0, sizeof(line0), "P:%7lu Pa", (unsigned long)baro.pressure);
-    snprintf(line1, sizeof(line1), "T:    %+6d C", (int)baro.temperature);
+    snprintf(line1, sizeof(line1), "T: %+d.%d C", t_int, t_frac);
     app_lcd_show(line0, line1);
 }
 
-static void app_key_7_action(uint8_t digits[8])
+static void app_key_7_action()
 {
-    digits[0] = 7u;
-    lib_seg_display_update(digits);
-    app_show_key_splash("7: Barometer", "Hold for P+T");
+    app_show_key_splash("7: Barometer", "Live P+T");
     g_key7_live_baro_mode = 1u;
     LOG_I(TAG, "KEY 7: Live barometer mode ON");
 }
@@ -343,12 +315,9 @@ static void app_key_8_action(uint8_t digits[8])
     app_show_default_lcd_splash();
 }
 
-static void app_key_9_action(uint8_t digits[8])
+static void app_key_9_action()
 {
-    digits[0] = 9u;
-    lib_seg_display_update(digits);
-    app_save_current_lcd();
-    app_show_key_splash("9: RFID Scan", "Hold near tag");
+    app_show_key_splash("9: RFID Scan", "Scan in progress");
     g_key9_no_tag_reads = 0u;
     g_key9_has_tag = 0u;
     g_key9_live_rfid_mode = 1u;
@@ -379,39 +348,53 @@ static void app_key_hash_action(void)
     LOG_I(TAG, "KEY 12/#: REED_SW raw=%u", reed_raw);
 }
 
+static void app_deactivate_all_live_modes(void)
+{
+    g_key3_live_adc_mode   = 0u;
+    g_key4_live_acc_mode   = 0u;
+    g_key5_live_gyr_mode   = 0u;
+    g_key6_live_mag_mode   = 0u;
+    g_key7_live_baro_mode  = 0u;
+    g_key9_live_rfid_mode  = 0u;
+    g_key9_no_tag_reads    = 0u;
+    g_key9_has_tag         = 0u;
+    g_key12_live_reed_mode = 0u;
+}
+
 static void app_execute_key_action(lib_mkb_key_t key, uint8_t digits[8])
 {
+    app_deactivate_all_live_modes();
     switch (key)
     {
         case LIB_MKB_KEY_0:
-            app_key_0_action(digits);
+            app_key_0_action();
             break;
         case LIB_MKB_KEY_1:
-            app_key_1_action(digits);
+            app_key_1_action();
             break;
         case LIB_MKB_KEY_2:
-            app_key_2_action(digits);
+            app_key_2_action();
             break;
         case LIB_MKB_KEY_3:
-            app_key_3_action(digits);
+            app_key_3_action();
             break;
         case LIB_MKB_KEY_4:
-            app_key_4_action(digits);
+            app_key_4_action();
             break;
         case LIB_MKB_KEY_5:
-            app_key_5_action(digits);
+            app_key_5_action();
             break;
         case LIB_MKB_KEY_6:
-            app_key_6_action(digits);
+            app_key_6_action();
             break;
         case LIB_MKB_KEY_7:
-            app_key_7_action(digits);
+            app_key_7_action();
             break;
         case LIB_MKB_KEY_8:
             app_key_8_action(digits);
             break;
         case LIB_MKB_KEY_9:
-            app_key_9_action(digits);
+            app_key_9_action();
             break;
         case LIB_MKB_KEY_STAR:
             app_key_star_action();
@@ -422,6 +405,282 @@ static void app_execute_key_action(lib_mkb_key_t key, uint8_t digits[8])
         default:
             break;
     }
+}
+
+static void app_handle_key_release(lib_mkb_key_t key)
+{
+    if (key == LIB_MKB_KEY_1)
+    {
+        app_show_default_lcd_splash();
+        LOG_I(TAG, "KEY 1: Released, splash restored");
+    }
+    else if (key == LIB_MKB_KEY_2)
+    {
+        app_show_default_lcd_splash();
+        LOG_I(TAG, "KEY 2: Released, splash restored");
+    }
+}
+
+static void app_process_keyboard(uint8_t digits[8])
+{
+    uint8_t keys[4][3];
+    lib_mkb_result_t mkb_result = lib_mkb_read(keys);
+
+    if (mkb_result.status != LIB_MKB_STATE_CHANGED)
+    {
+        return;
+    }
+
+    LOG_I("MKB", "Key=%d State=%d", mkb_result.key_code, mkb_result.key_state);
+
+    if (mkb_result.key_state == LIB_MKB_KEY_PRESSED)
+    {
+        app_execute_key_action(mkb_result.key_code, digits);
+    }
+    else if (mkb_result.key_state == LIB_MKB_KEY_RELEASED)
+    {
+        app_handle_key_release(mkb_result.key_code);
+    }
+}
+
+static void app_process_adc_live_mode(void)
+{
+    if (g_key3_live_adc_mode == 1u)
+    {
+        g_key3_delay_tick++;
+        if (g_key3_delay_tick >= SENSOR_SHOW_DELAY_TICKS)
+        {
+            int16_t adc0 = lib_adc_get(ADC_CH_POT_2_0);
+            int16_t adc1 = lib_adc_get(ADC_CH_POT_2_1);
+            int16_t adc2 = lib_adc_get(ADC_CH_EXT_2_5);
+            app_show_adc_live_on_lcd(adc0, adc1, adc2);
+            g_key3_live_adc_mode = 2u;
+        }
+    }
+    else if (g_key3_live_adc_mode == 2u)
+    {
+        static uint16_t adc_tick = 0u;
+
+        if (adc_tick == 0u)
+        {
+            int16_t adc0 = lib_adc_get(ADC_CH_POT_2_0);
+            int16_t adc1 = lib_adc_get(ADC_CH_POT_2_1);
+            int16_t adc2 = lib_adc_get(ADC_CH_EXT_2_5);
+            app_show_adc_live_on_lcd(adc0, adc1, adc2);
+        }
+
+        adc_tick++;
+        if (adc_tick >= ADC_LCD_UPDATE_TICKS)
+        {
+            adc_tick = 0u;
+        }
+    }
+}
+
+static void app_process_rfid_live_mode(void)
+{
+    if (g_key9_live_rfid_mode != 0u)
+    {
+        static uint16_t rfid_tick = 0u;
+
+        if (rfid_tick == 0u)
+        {
+            uint8_t uid[RFID_UID_LEN];
+            ret_code_t result = lib_rfid_scan(uid);
+
+            if (result == RET_CODE_OK)
+            {
+                char line0[17];
+                char line1[17];
+
+                snprintf(line0, sizeof(line0), "%02X %02X %02X %02X %02X",
+                         uid[0], uid[1], uid[2], uid[3], uid[4]);
+                snprintf(line1, sizeof(line1), "TAG FOUND!");
+
+                app_lcd_show(line0, line1);
+                g_key9_no_tag_reads = 0u;
+                g_key9_has_tag = 1u;
+
+                LOG_I(TAG, "KEY 9: TAG %02X %02X %02X %02X %02X",
+                      uid[0], uid[1], uid[2], uid[3], uid[4]);
+            }
+            else
+            {
+                if (g_key9_no_tag_reads < 255u)
+                {
+                    g_key9_no_tag_reads++;
+                }
+
+                if (g_key9_has_tag == 0u)
+                {
+                    if (g_key9_no_tag_reads >= RFID_NO_TAG_READS)
+                    {
+                        app_show_key_splash("9: RFID Scan", "No tag found");
+                    }
+                }
+                else if (g_key9_no_tag_reads >= RFID_NO_TAG_READS)
+                {
+                    g_key9_has_tag = 0u;
+                    app_show_key_splash("9: RFID Scan", "No tag found");
+                }
+            }
+        }
+
+        rfid_tick++;
+        if (rfid_tick >= RFID_LCD_UPDATE_TICKS)
+        {
+            rfid_tick = 0u;
+        }
+    }
+}
+
+static void app_process_baro_live_mode(void)
+{
+    if (g_key7_live_baro_mode != 0u)
+    {
+        static uint16_t baro_tick = 0u;
+
+        if (baro_tick == 0u)
+        {
+            lib_barometer_data_t baro = lib_barometer_get();
+            app_show_baro_live_on_lcd(baro);
+            LOG_I(TAG, "KEY 7: Baro P=%lu Pa T=%d C",
+                  (unsigned long)baro.pressure, (int)baro.temperature);
+        }
+
+        baro_tick++;
+        if (baro_tick >= ADC_LCD_UPDATE_TICKS)
+        {
+            baro_tick = 0u;
+        }
+    }
+}
+
+static void app_process_reed_live_mode(void)
+{
+    if (g_key12_live_reed_mode != 0u)
+    {
+        static uint16_t reed_tick = 0u;
+
+        if (reed_tick == 0u)
+        {
+            uint8_t reed_raw = REED_SW_Read();
+            app_show_reed_status_on_lcd(reed_raw);
+            LOG_I(TAG, "KEY 12/#: REED_SW raw=%u", reed_raw);
+        }
+
+        reed_tick++;
+        if (reed_tick >= ADC_LCD_UPDATE_TICKS)
+        {
+            reed_tick = 0u;
+        }
+    }
+}
+
+static void app_process_acc_live_mode(const lib_acc_gyr_data_t *acc_gyr_data)
+{
+    if (g_key4_live_acc_mode == 1u)
+    {
+        g_key4_delay_tick++;
+        if (g_key4_delay_tick >= SENSOR_SHOW_DELAY_TICKS)
+        {
+            LOG_I(TAG, "KEY 4: Acc X=%ld Y=%ld Z=%ld",
+                  acc_gyr_data->acc.x, acc_gyr_data->acc.y, acc_gyr_data->acc.z);
+            app_show_acc_live_on_lcd(acc_gyr_data->acc.x, acc_gyr_data->acc.y, acc_gyr_data->acc.z);
+            g_key4_live_acc_mode = 2u;
+        }
+    }
+    else if (g_key4_live_acc_mode == 2u)
+    {
+        static uint16_t acc_live_tick = 0u;
+        acc_live_tick++;
+        if (acc_live_tick >= ADC_LCD_UPDATE_TICKS)
+        {
+            acc_live_tick = 0u;
+            LOG_I(TAG, "KEY 4: Acc X=%ld Y=%ld Z=%ld",
+                  acc_gyr_data->acc.x, acc_gyr_data->acc.y, acc_gyr_data->acc.z);
+            app_show_acc_live_on_lcd(acc_gyr_data->acc.x, acc_gyr_data->acc.y, acc_gyr_data->acc.z);
+        }
+    }
+}
+
+static void app_process_gyr_live_mode(const lib_acc_gyr_data_t *acc_gyr_data)
+{
+    if (g_key5_live_gyr_mode == 1u)
+    {
+        g_key5_delay_tick++;
+        if (g_key5_delay_tick >= SENSOR_SHOW_DELAY_TICKS)
+        {
+            LOG_I(TAG, "KEY 5: Gyr X=%ld Y=%ld Z=%ld",
+                  acc_gyr_data->gyr.x, acc_gyr_data->gyr.y, acc_gyr_data->gyr.z);
+            app_show_gyr_live_on_lcd(acc_gyr_data->gyr.x, acc_gyr_data->gyr.y, acc_gyr_data->gyr.z);
+            g_key5_live_gyr_mode = 2u;
+        }
+    }
+    else if (g_key5_live_gyr_mode == 2u)
+    {
+        static uint16_t gyr_live_tick = 0u;
+        gyr_live_tick++;
+        if (gyr_live_tick >= ADC_LCD_UPDATE_TICKS)
+        {
+            gyr_live_tick = 0u;
+            LOG_I(TAG, "KEY 5: Gyr X=%ld Y=%ld Z=%ld",
+                  acc_gyr_data->gyr.x, acc_gyr_data->gyr.y, acc_gyr_data->gyr.z);
+            app_show_gyr_live_on_lcd(acc_gyr_data->gyr.x, acc_gyr_data->gyr.y, acc_gyr_data->gyr.z);
+        }
+    }
+}
+
+static void app_process_mag_live_mode(const lib_magnetometer_data_t *magnetometer_data)
+{
+    if (g_key6_live_mag_mode == 1u)
+    {
+        g_key6_delay_tick++;
+        if (g_key6_delay_tick >= SENSOR_SHOW_DELAY_TICKS)
+        {
+            LOG_I(TAG, "KEY 6: Mag X=%ld Y=%ld Z=%ld",
+                  magnetometer_data->mag.x, magnetometer_data->mag.y, magnetometer_data->mag.z);
+            app_show_mag_live_on_lcd(magnetometer_data->mag.x, magnetometer_data->mag.y, magnetometer_data->mag.z);
+            g_key6_live_mag_mode = 2u;
+        }
+    }
+    else if (g_key6_live_mag_mode == 2u)
+    {
+        static uint16_t mag_live_tick = 0u;
+        mag_live_tick++;
+        if (mag_live_tick >= ADC_LCD_UPDATE_TICKS)
+        {
+            mag_live_tick = 0u;
+            LOG_I(TAG, "KEY 6: Mag X=%ld Y=%ld Z=%ld",
+                  magnetometer_data->mag.x, magnetometer_data->mag.y, magnetometer_data->mag.z);
+            app_show_mag_live_on_lcd(magnetometer_data->mag.x, magnetometer_data->mag.y, magnetometer_data->mag.z);
+        }
+    }
+}
+
+static void app_update_sensor_temperature_cache(const lib_acc_gyr_data_t *acc_gyr_data,
+                                                const lib_magnetometer_data_t *magnetometer_data)
+{
+    if (acc_gyr_data->is_new.tmp)
+    {
+        g_last_imu_temp = acc_gyr_data->temperature;
+    }
+    if (magnetometer_data->is_new)
+    {
+        g_last_mag_temp = magnetometer_data->temperature;
+    }
+}
+
+static void app_process_runtime_modes(const lib_acc_gyr_data_t *acc_gyr_data,
+                                      const lib_magnetometer_data_t *magnetometer_data)
+{
+    app_process_adc_live_mode();
+    app_process_rfid_live_mode();
+    app_process_baro_live_mode();
+    app_process_reed_live_mode();
+    app_process_acc_live_mode(acc_gyr_data);
+    app_process_gyr_live_mode(acc_gyr_data);
+    app_process_mag_live_mode(magnetometer_data);
 }
 
 static void app_init_libraries(void)
@@ -443,13 +702,13 @@ static void app_init_libraries(void)
     lib_adc_init();
 
     lib_servo_init();
-    lib_servo_set_angle(90);
 
     lib_acc_gyr_init();
     lib_magnetometer_init();
     lib_barometer_init();
     lib_buzzer_init();
 
+    lib_servo_set_angle(SERVO_MID_ANGLE_DEG);
     LOG_I("MAIN", "All libraries initialized");
 }
 
@@ -472,9 +731,9 @@ int main(void)
 
 
 /**************                     Turn Off Leds                  ***************/
-    LED_RED_Write(1u);
-    LED_BLUE_Write(1u);
-    LED_GREEN_Write(1u);
+    LED_RED_Write(0u);
+    LED_BLUE_Write(0u);
+    LED_GREEN_Write(0u);
 
 
     for(;;)
@@ -482,289 +741,11 @@ int main(void)
         lib_acc_gyr_data_t acc_gyr_data = lib_acc_gyr_get();
         lib_magnetometer_data_t magnetometer_data = lib_magnetometer_get();
 
-        if (acc_gyr_data.is_new.tmp)
-        {
-            g_last_imu_temp = acc_gyr_data.temperature;
-        }
-        if (magnetometer_data.is_new)
-        {
-            g_last_mag_temp = magnetometer_data.temperature;
-        }
+        app_update_sensor_temperature_cache(&acc_gyr_data, &magnetometer_data);
 
-        uint8_t keys[4][3];
-        lib_mkb_result_t mkb_result = lib_mkb_read(keys);
-        if(mkb_result.status == LIB_MKB_STATE_CHANGED)
-        {
-            LOG_I("MKB", "Key=%d State=%d", mkb_result.key_code, mkb_result.key_state);
+        app_process_keyboard(digits);
 
-            if (mkb_result.key_state == LIB_MKB_KEY_PRESSED)
-            {
-                app_execute_key_action(mkb_result.key_code, digits);
-            }
-            else if ((mkb_result.key_code == LIB_MKB_KEY_1) &&
-                     (mkb_result.key_state == LIB_MKB_KEY_RELEASED))
-            {
-                app_show_default_lcd_splash();
-                LOG_I(TAG, "KEY 1: Released, splash restored");
-            }
-            else if ((mkb_result.key_code == LIB_MKB_KEY_2) &&
-                     (mkb_result.key_state == LIB_MKB_KEY_RELEASED))
-            {
-                app_show_default_lcd_splash();
-                LOG_I(TAG, "KEY 2: Released, splash restored");
-            }
-            else if ((mkb_result.key_code == LIB_MKB_KEY_3) &&
-                     (mkb_result.key_state == LIB_MKB_KEY_RELEASED))
-            {
-                g_key3_live_adc_mode = 0u;
-                app_show_default_lcd_splash();
-                LOG_I(TAG, "KEY 3: Live ADC LCD mode OFF");
-            }
-            else if ((mkb_result.key_code == LIB_MKB_KEY_4) &&
-                     (mkb_result.key_state == LIB_MKB_KEY_RELEASED))
-            {
-                g_key4_live_acc_mode = 0u;
-                app_show_default_lcd_splash();
-                LOG_I(TAG, "KEY 4: Live accelerometer LCD mode OFF");
-            }
-            else if ((mkb_result.key_code == LIB_MKB_KEY_5) &&
-                     (mkb_result.key_state == LIB_MKB_KEY_RELEASED))
-            {
-                g_key5_live_gyr_mode = 0u;
-                app_show_default_lcd_splash();
-                LOG_I(TAG, "KEY 5: Live gyroscope LCD mode OFF");
-            }
-            else if ((mkb_result.key_code == LIB_MKB_KEY_6) &&
-                     (mkb_result.key_state == LIB_MKB_KEY_RELEASED))
-            {
-                g_key6_live_mag_mode = 0u;
-                app_show_default_lcd_splash();
-                LOG_I(TAG, "KEY 6: Live magnetometer LCD mode OFF");
-            }
-            else if ((mkb_result.key_code == LIB_MKB_KEY_7) &&
-                     (mkb_result.key_state == LIB_MKB_KEY_RELEASED))
-            {
-                g_key7_live_baro_mode = 0u;
-                app_show_default_lcd_splash();
-                LOG_I(TAG, "KEY 7: Live barometer mode OFF");
-            }
-            else if ((mkb_result.key_code == LIB_MKB_KEY_9) &&
-                     (mkb_result.key_state == LIB_MKB_KEY_RELEASED))
-            {
-                g_key9_live_rfid_mode = 0u;
-                g_key9_no_tag_reads = 0u;
-                g_key9_has_tag = 0u;
-                app_restore_saved_lcd();
-                LOG_I(TAG, "KEY 9: Live RFID scan OFF, previous LCD restored");
-            }
-            else if ((mkb_result.key_code == LIB_MKB_KEY_HASH) &&
-                     (mkb_result.key_state == LIB_MKB_KEY_RELEASED))
-            {
-                g_key12_live_reed_mode = 0u;
-                app_show_default_lcd_splash();
-                LOG_I(TAG, "KEY 12/#: REED_SW mode OFF");
-            }
-
-            /* Show key code on the first digit and key state on the second digit:
-             * state 1 = pressed, state 0 = released. */
-            if (mkb_result.key_code <= LIB_MKB_KEY_9)
-            {
-                digits[0] = (uint8_t)mkb_result.key_code;
-            }
-            else
-            {
-                /* For STAR/HASH use '-' placeholder on 7-segment (code 10). */
-                digits[0] = 10u;
-            }
-
-            digits[1] = (mkb_result.key_state == LIB_MKB_KEY_PRESSED) ? 1u : 0u;
-            lib_seg_display_update(digits);
-        }
-
-        if (g_key3_live_adc_mode != 0u)
-        {
-            static uint16_t adc_tick = 0u;
-
-            if (adc_tick == 0u)
-            {
-                int16_t adc0 = lib_adc_get(ADC_CH_POT_2_0);
-                int16_t adc1 = lib_adc_get(ADC_CH_POT_2_1);
-                int16_t adc2 = lib_adc_get(ADC_CH_EXT_2_5);
-                app_show_adc_live_on_lcd(adc0, adc1, adc2);
-            }
-
-            adc_tick++;
-            if (adc_tick >= ADC_LCD_UPDATE_TICKS)
-            {
-                adc_tick = 0u;
-            }
-        }
-
-        if (g_key9_live_rfid_mode != 0u)
-        {
-            static uint16_t rfid_tick = 0u;
-
-            if (rfid_tick == 0u)
-            {
-                uint8_t uid[RFID_UID_LEN];
-                ret_code_t result = lib_rfid_scan(uid);
-
-                if (result == RET_CODE_OK)
-                {
-                    char line0[17];
-                    char line1[17];
-
-                    snprintf(line0, sizeof(line0), "%02X %02X %02X %02X %02X",
-                             uid[0], uid[1], uid[2], uid[3], uid[4]);
-                    snprintf(line1, sizeof(line1), "TAG FOUND!");
-
-                    app_lcd_show(line0, line1);
-                    g_key9_no_tag_reads = 0u;
-                    g_key9_has_tag = 1u;
-
-                    LOG_I(TAG, "KEY 9: TAG %02X %02X %02X %02X %02X",
-                          uid[0], uid[1], uid[2], uid[3], uid[4]);
-                }
-                else
-                {
-                    if (g_key9_no_tag_reads < 255u)
-                    {
-                        g_key9_no_tag_reads++;
-                    }
-
-                    if (g_key9_has_tag == 0u)
-                    {
-                        if (g_key9_no_tag_reads >= RFID_NO_TAG_READS)
-                        {
-                            app_show_key_splash("9: RFID Scan", "No tag found");
-                        }
-                    }
-                    else if (g_key9_no_tag_reads >= RFID_NO_TAG_READS)
-                    {
-                        g_key9_has_tag = 0u;
-                        app_show_key_splash("9: RFID Scan", "No tag found");
-                    }
-                }
-            }
-
-            rfid_tick++;
-            if (rfid_tick >= RFID_LCD_UPDATE_TICKS)
-            {
-                rfid_tick = 0u;
-            }
-        }
-
-        if (g_key7_live_baro_mode != 0u)
-        {
-            static uint16_t baro_tick = 0u;
-
-            if (baro_tick == 0u)
-            {
-                lib_barometer_data_t baro = lib_barometer_get();
-                app_show_baro_live_on_lcd(baro);
-                LOG_I(TAG, "KEY 7: Baro P=%lu Pa T=%d C",
-                      (unsigned long)baro.pressure, (int)baro.temperature);
-            }
-
-            baro_tick++;
-            if (baro_tick >= ADC_LCD_UPDATE_TICKS)
-            {
-                baro_tick = 0u;
-            }
-        }
-
-        if (g_key12_live_reed_mode != 0u)
-        {
-            static uint16_t reed_tick = 0u;
-
-            if (reed_tick == 0u)
-            {
-                uint8_t reed_raw = REED_SW_Read();
-                app_show_reed_status_on_lcd(reed_raw);
-                LOG_I(TAG, "KEY 12/#: REED_SW raw=%u", reed_raw);
-            }
-
-            reed_tick++;
-            if (reed_tick >= ADC_LCD_UPDATE_TICKS)
-            {
-                reed_tick = 0u;
-            }
-        }
-
-        /* KEY 4: phase 1 = showing temp for 1.2s, then live sensor display */
-        if (g_key4_live_acc_mode == 1u)
-        {
-            g_key4_delay_tick++;
-            if (g_key4_delay_tick >= SENSOR_SHOW_DELAY_TICKS)
-            {
-                LOG_I(TAG, "KEY 4: Acc X=%ld Y=%ld Z=%ld",
-                      acc_gyr_data.acc.x, acc_gyr_data.acc.y, acc_gyr_data.acc.z);
-                app_show_acc_live_on_lcd(acc_gyr_data.acc.x, acc_gyr_data.acc.y, acc_gyr_data.acc.z);
-                g_key4_live_acc_mode = 2u;
-            }
-        }
-        else if (g_key4_live_acc_mode == 2u)
-        {
-            static uint16_t acc_live_tick = 0u;
-            acc_live_tick++;
-            if (acc_live_tick >= ADC_LCD_UPDATE_TICKS)
-            {
-                acc_live_tick = 0u;
-                LOG_I(TAG, "KEY 4: Acc X=%ld Y=%ld Z=%ld",
-                      acc_gyr_data.acc.x, acc_gyr_data.acc.y, acc_gyr_data.acc.z);
-                app_show_acc_live_on_lcd(acc_gyr_data.acc.x, acc_gyr_data.acc.y, acc_gyr_data.acc.z);
-            }
-        }
-
-        /* KEY 5: phase 1 = showing temp for 1.2s, then live sensor display */
-        if (g_key5_live_gyr_mode == 1u)
-        {
-            g_key5_delay_tick++;
-            if (g_key5_delay_tick >= SENSOR_SHOW_DELAY_TICKS)
-            {
-                LOG_I(TAG, "KEY 5: Gyr X=%ld Y=%ld Z=%ld",
-                      acc_gyr_data.gyr.x, acc_gyr_data.gyr.y, acc_gyr_data.gyr.z);
-                app_show_gyr_live_on_lcd(acc_gyr_data.gyr.x, acc_gyr_data.gyr.y, acc_gyr_data.gyr.z);
-                g_key5_live_gyr_mode = 2u;
-            }
-        }
-        else if (g_key5_live_gyr_mode == 2u)
-        {
-            static uint16_t gyr_live_tick = 0u;
-            gyr_live_tick++;
-            if (gyr_live_tick >= ADC_LCD_UPDATE_TICKS)
-            {
-                gyr_live_tick = 0u;
-                LOG_I(TAG, "KEY 5: Gyr X=%ld Y=%ld Z=%ld",
-                      acc_gyr_data.gyr.x, acc_gyr_data.gyr.y, acc_gyr_data.gyr.z);
-                app_show_gyr_live_on_lcd(acc_gyr_data.gyr.x, acc_gyr_data.gyr.y, acc_gyr_data.gyr.z);
-            }
-        }
-
-        /* KEY 6: phase 1 = showing temp for 1.2s, then live sensor display */
-        if (g_key6_live_mag_mode == 1u)
-        {
-            g_key6_delay_tick++;
-            if (g_key6_delay_tick >= SENSOR_SHOW_DELAY_TICKS)
-            {
-                LOG_I(TAG, "KEY 6: Mag X=%ld Y=%ld Z=%ld",
-                      magnetometer_data.mag.x, magnetometer_data.mag.y, magnetometer_data.mag.z);
-                app_show_mag_live_on_lcd(magnetometer_data.mag.x, magnetometer_data.mag.y, magnetometer_data.mag.z);
-                g_key6_live_mag_mode = 2u;
-            }
-        }
-        else if (g_key6_live_mag_mode == 2u)
-        {
-            static uint16_t mag_live_tick = 0u;
-            mag_live_tick++;
-            if (mag_live_tick >= ADC_LCD_UPDATE_TICKS)
-            {
-                mag_live_tick = 0u;
-                LOG_I(TAG, "KEY 6: Mag X=%ld Y=%ld Z=%ld",
-                      magnetometer_data.mag.x, magnetometer_data.mag.y, magnetometer_data.mag.z);
-                app_show_mag_live_on_lcd(magnetometer_data.mag.x, magnetometer_data.mag.y, magnetometer_data.mag.z);
-            }
-        }
+        app_process_runtime_modes(&acc_gyr_data, &magnetometer_data);
       
         CyDelay(10);
     }

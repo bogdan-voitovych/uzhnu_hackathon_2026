@@ -1,6 +1,11 @@
 /********************************************************************************
  **********                           INCLUDE FILES                   ***********
 *********************************************************************************/
+/**
+ * @file lib_adc.c
+ * @brief ADC driver implementation for channel initialization and reads.
+ */
+
 #include "lib_adc.h"
 #include <project.h>
 
@@ -11,6 +16,9 @@
 /********************************************************************************
  **********                         PUBLIC FUNCTIONS                  ***********
 *********************************************************************************/
+/**
+ * @brief Initialize ADC block and start continuous conversion.
+ */
 void lib_adc_init()
 {
     ADC_Start();
@@ -18,6 +26,12 @@ void lib_adc_init()
     LOG_I(TAG, "ADC initialized and conversion started");
 }
 
+/**
+ * @brief Read a raw sample from selected ADC channel.
+ *
+ * @param channel Channel identifier from lib_adc_channel_num_t.
+ * @return int16_t Raw ADC sample value.
+ */
 int16_t lib_adc_get(lib_adc_channel_num_t channel)
 {
     int16_t ret_val = 0;

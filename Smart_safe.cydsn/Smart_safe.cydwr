@@ -20,6 +20,7 @@
       <Data key="4d86b7dd-2da8-470c-b243-5af350d2b4c1" value="MKB_COL2" />
       <Data key="04ebf772-1b9d-4f5b-a842-22b9668e17f3" value="SEG_74HC595_LATCH" />
       <Data key="5d89d3ef-a4ee-4d36-9112-935ab1de4046" value="PIN_SERVO" />
+      <Data key="6da912c0-87e8-4326-8b9b-5c40bc3a11f8" value="BTN_SW" />
       <Data key="6ea65ae5-7df9-4fc4-8d2e-4c6e29b4ff80/52f31aa9-2f0a-497d-9a1f-1424095e13e6" value="SW_Tx_UART_tx" />
       <Data key="7bd217a4-ba9d-4c22-9fc2-307f013903a8" value="Pin_ADC_P25" />
       <Data key="8c8734ef-3644-4eed-bc55-360072b94fff/2a40dc14-87b1-41e7-85eb-165c55565779" value="SPIM_ss1_m" />
@@ -36,7 +37,7 @@
       <Data key="a9ec599e-fd8d-4bba-8beb-fccb7c230a11" value="BUZZER" />
       <Data key="ae2f8c96-51b1-42aa-9375-60b7dc5d1f0a" value="FET" />
       <Data key="b2fa510b-cf13-4318-8e25-1b64d518509b" value="RELAY" />
-      <Data key="b9e467dc-0765-40de-8c9d-55f01c099696" value="BUTTON" />
+      <Data key="b9e467dc-0765-40de-8c9d-55f01c099696" value="REED_SW" />
       <Data key="b9981108-7bba-4b5a-b485-d344ed9a1817" value="MKB_ROW3" />
       <Data key="e3d2e607-f5a1-4f46-b346-2d83f311662f" value="MKB_ROW2" />
       <Data key="e851a3b9-efb8-48be-bbb8-b303b216c393" value="RFID_RST" />
@@ -1305,6 +1306,11 @@
     <Group key="5d89d3ef-a4ee-4d36-9112-935ab1de4046">
       <Group key="0">
         <Data key="Port Format" value="3,7" />
+      </Group>
+    </Group>
+    <Group key="6da912c0-87e8-4326-8b9b-5c40bc3a11f8">
+      <Group key="0">
+        <Data key="Port Format" value="4,2" />
       </Group>
     </Group>
     <Group key="6ea65ae5-7df9-4fc4-8d2e-4c6e29b4ff80/52f31aa9-2f0a-497d-9a1f-1424095e13e6">

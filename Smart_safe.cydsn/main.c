@@ -235,16 +235,13 @@ static void app_show_mag_live_on_lcd(int32_t mx, int32_t my, int32_t mz)
     app_lcd_show(line0, line1);
 }
 
-static void app_show_reed_status_on_lcd(uint8_t reed_raw)
+static void app_show_reed_btn_on_lcd(uint8_t reed_raw, uint8_t btn_raw)
 {
-    if (reed_raw == 0u)
-    {
-        app_lcd_show("12: REED_SW", "Pressed / Closed");
-    }
-    else
-    {
-        app_lcd_show("12: REED_SW", "Released / Open");
-    }
+    char line0[17];
+    char line1[17];
+    snprintf(line0, sizeof(line0), "REED: %s", reed_raw == 0u ? "Closed" : "Open");
+    snprintf(line1, sizeof(line1), "BTN:  %s", btn_raw == 0u ? "Pressed" : "Released");
+    app_lcd_show(line0, line1);
 }
 
 static void app_key_5_action()
@@ -342,10 +339,11 @@ static void app_key_star_action(void)
 static void app_key_hash_action(void)
 {
     uint8_t reed_raw = REED_SW_Read();
+    uint8_t btn_raw  = BTN_SW_Read();
 
     g_key12_live_reed_mode = 1u;
-    app_show_reed_status_on_lcd(reed_raw);
-    LOG_I(TAG, "KEY 12/#: REED_SW raw=%u", reed_raw);
+    app_show_reed_btn_on_lcd(reed_raw, btn_raw);
+    LOG_I(TAG, "KEY 12/#: REED_SW raw=%u BTN_SW raw=%u", reed_raw, btn_raw);
 }
 
 static void app_deactivate_all_live_modes(void)
@@ -565,8 +563,9 @@ static void app_process_reed_live_mode(void)
         if (reed_tick == 0u)
         {
             uint8_t reed_raw = REED_SW_Read();
-            app_show_reed_status_on_lcd(reed_raw);
-            LOG_I(TAG, "KEY 12/#: REED_SW raw=%u", reed_raw);
+            uint8_t btn_raw  = BTN_SW_Read();
+            app_show_reed_btn_on_lcd(reed_raw, btn_raw);
+            LOG_I(TAG, "KEY 12/#: REED_SW raw=%u BTN_SW raw=%u", reed_raw, btn_raw);
         }
 
         reed_tick++;
